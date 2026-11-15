@@ -147,3 +147,14 @@ table.tb td:last-child { border-radius: 0 14px 14px 0; }
 .welcome .mascot { font-size: 6rem; animation: bob 2.4s ease-in-out infinite; }
 .welcome h1 { font-size: 2rem; margin: 8px 0; }
 @media (max-width: 520px) { body { font-size: 17px; } .opts { grid-template-columns: 1fr; } .stats div { font-size: 1.1rem; } }
+
+/* murid & kod sandaran */
+.hello button.mascot { background: none; padding: 0; line-height: 1; flex: none; }
+.welcome.sub { padding-top: 4vh; }
+.welcome p { margin: 14px 0 8px; }
+.avs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 12px 0 4px; }
+.av { font-size: 1.9rem; line-height: 1; padding: 8px 0; border-radius: 16px; background: var(--card); border: 3px solid var(--line); }
+.av.sel { border-color: var(--c); background: #F1EDFF; }
+.code { font: .85rem/1.4 ui-monospace, Menlo, monospace; width: 100%; margin-top: 12px; padding: 12px; border-radius: 14px; border: 3px solid var(--line); word-break: break-all; resize: vertical; -webkit-user-select: text; user-select: text; }
+.msg { text-align: center; font-weight: 800; margin-top: 12px; min-height: 1.4em; }
+.panel small { display: block; }

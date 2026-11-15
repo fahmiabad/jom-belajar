@@ -4,11 +4,47 @@
 (function () {
   "use strict";
   var app = document.getElementById("app");
-  var KEY = "jom-belajar-v1";
-  var DEF = { name: "", asked: false, stars: {}, box: {}, streak: 0, last: 0, eng: false, sound: true };
-  var S;
-  try { S = Object.assign({}, DEF, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) { S = Object.assign({}, DEF); }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  /* ---------- simpanan: satu senarai murid, dan kemajuan berasingan bagi setiap murid ---------- */
+  var OLD = "jom-belajar-v1", PKEY = "jom-belajar-profiles", SKEY = "jom-belajar-p:";
+  var AV = ["🦉", "🐱", "🐼", "🦊", "🐯", "🐰", "🦄", "🐸", "🐵", "🐧", "🦁", "🐨"];
+  var YEAR = 2; // tahun persekolahan disimpan pada setiap murid, sedia untuk Tahun 1–6 kelak
+  function fresh() { return { stars: {}, box: {}, streak: 0, last: 0, eng: false, sound: true }; }
+  function get(k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } }
+  function put(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  var P = { cur: null, list: [] }; // murid: { id, name, av, year }
+  var ME = null, S = fresh();
+  function saveP() { put(PKEY, P); }
+  function save() { if (ME) put(SKEY + ME.id, S); }
+  function addProfile(name, av, state) {
+    var id = "p" + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+    name = String(name || "").trim().slice(0, 20) || "Murid " + (P.list.length + 1);
+    P.list.push({ id: id, name: name, av: AV.indexOf(av) < 0 ? AV[0] : av, year: YEAR });
+    put(SKEY + id, Object.assign(fresh(), state || {}));
+    saveP();
+    return id;
+  }
+  function use(id) {
+    ME = P.list.filter(function (p) { return p.id === id; })[0] || null;
+    P.cur = ME ? ME.id : null; saveP();
+    S = Object.assign(fresh(), (ME && get(SKEY + ME.id)) || {});
+    applyEng();
+  }
+  function removeProfile(id) {
+    P.list = P.list.filter(function (p) { return p.id !== id; });
+    try { localStorage.removeItem(SKEY + id); } catch (e) {}
+    use(null);
+  }
+  (function () {
+    var p = get(PKEY);
+    if (p && Array.isArray(p.list)) { P = p; return; }
+    // versi lama menyimpan seorang murid sahaja – jadikan dia murid pertama, kemajuan dikekalkan
+    var old = get(OLD);
+    if (old && old.asked) {
+      var st = fresh();
+      ["stars", "box", "streak", "last", "eng", "sound"].forEach(function (k) { if (k in old) st[k] = old[k]; });
+      addProfile(old.name, AV[0], st);
+    }
+  })();
 
   var SUBJECTS = window.SUBJECTS || [];
   var EN = window.EN || {};
@@ -150,23 +186,59 @@
 
   /* ---------- paparan ---------- */
   function bar(title, right) {
-    return '<header class="bar"><button class="back" id="back" aria-label="Kembali">←</button><h1>' + title + '</h1><div class="right">' + (right || "⭐ " + totalStars()) + "</div></header>";
+    return '<header class="bar"><button class="back" id="back" aria-label="Kembali">←</button><h1>' + title + '</h1>' + (right === " " ? "<span></span>" : '<div class="right">' + (right || "⭐ " + totalStars()) + "</div>") + "</header>";
   }
   function color(c) { document.documentElement.style.setProperty("--c", c || "#7C5CFF"); }
 
+  function avs(sel) {
+    return '<div class="avs">' + AV.map(function (a) { return '<button class="av' + (a === sel ? " sel" : "") + '" data-av="' + a + '">' + a + "</button>"; }).join("") + "</div>";
+  }
+  function avPick() {
+    on("[data-av]", function (el) {
+      Array.prototype.forEach.call(app.querySelectorAll(".av"), function (b) { b.classList.toggle("sel", b === el); });
+      sfx.tap();
+    });
+  }
+  function avSel() { var el = $(".av.sel"); return el ? el.dataset.av : AV[0]; }
+
+  // murid baharu (juga skrin pertama apabila belum ada sesiapa)
   function welcome() {
     color();
-    render('<div class="welcome"><div class="mascot">🦉</div><h1>Selamat datang!' + en("Welcome!") + "</h1><p>Siapa nama awak?" + en("What is your name?") + "</p>" +
+    var first = !P.list.length, free = AV.filter(function (a) { return !P.list.some(function (p) { return p.av === a; }); })[0] || AV[0];
+    render((first ? "" : bar("➕ Murid baharu", " ")) + '<div class="welcome' + (first ? "" : " sub") + '">' +
+      (first ? '<div class="mascot">🦉</div><h1>Selamat datang!' + en("Welcome!") + "</h1>" : "") + "<p>Siapa nama awak?" + en("What is your name?") + "</p>" +
       '<div class="panel" style="margin-top:20px"><input type="text" id="nm" placeholder="Nama saya..." maxlength="20" autocomplete="off"></div>' +
-      '<button class="btn" id="go">Jom mula! 🚀' + en("Let's start!") + "</button></div>");
-    on("#go", function () { S.name = $("#nm").value.trim(); S.asked = true; save(); home(); });
+      "<p>Pilih gambar awak" + en("Choose your picture") + "</p>" + avs(free) +
+      '<button class="btn" id="go">Jom mula! 🚀' + en("Let's start!") + "</button>" +
+      '<button class="btn alt" id="rest">📥 Ada kod sandaran?' + en("Have a backup code?") + "</button></div>");
+    avPick();
+    on("#back", who);
+    on("#go", function () { var eng = S.eng; use(addProfile($("#nm").value, avSel())); S.eng = eng; save(); applyEng(); home(); });
+    on("#rest", function () { restore(first ? welcome : who); });
+  }
+
+  // pilih murid – dipaparkan semasa mula apabila ada lebih daripada seorang
+  function who() {
+    if (!P.list.length) return welcome();
+    color();
+    var h = '<div class="welcome sub"><div class="mascot">🦉</div><h1>Siapa yang bermain?' + en("Who is playing?") + '</h1><div class="grid" style="margin-top:18px">';
+    P.list.forEach(function (p) {
+      var st = get(SKEY + p.id) || {}, n = 0;
+      for (var k in st.stars || {}) n += st.stars[k];
+      h += '<button class="card" data-p="' + p.id + '"><span class="ic">' + p.av + "</span><span><b>" + esc(p.name) + '</b><span class="st">⭐ ' + n + "</span></span></button>";
+    });
+    render(h + '</div><button class="btn alt" id="add">➕ Tambah murid' + en("Add a child") + "</button>" +
+      '<button class="btn alt" id="rest">📥 Ada kod sandaran?' + en("Have a backup code?") + "</button></div>");
+    on("[data-p]", function (el) { use(el.dataset.p); sfx.tap(); home(); });
+    on("#add", welcome);
+    on("#rest", function () { restore(who); });
   }
 
   function home() {
-    if (!S.asked) return welcome();
+    if (!ME) return who();
     color();
     var due = dueCount();
-    var h = '<div class="hello"><div class="mascot">🦉</div><div class="grow"><h1>Hai, ' + esc(S.name || "kawan") + "! 👋</h1><p>Jom belajar sambil bermain." + en("Let's learn while we play.") + '</p></div><button class="round" id="set" aria-label="Tetapan">⚙️</button></div>' +
+    var h = '<div class="hello"><button class="mascot" id="who" aria-label="Tukar murid">' + ME.av + '</button><div class="grow"><h1>Hai, ' + esc(ME.name) + "! 👋</h1><p>Jom belajar sambil bermain." + en("Let's learn while we play.") + '</p></div><button class="round" id="set" aria-label="Tetapan">⚙️</button></div>' +
       '<div class="stats"><div>⭐ <b>' + totalStars() + "</b><small>bintang" + en("stars") + "</small></div><div>🔥 <b>" + (S.last >= today() - 1 ? S.streak : 0) + "</b><small>hari berturut-turut" + en("days in a row") + "</small></div><div>🧠 <b>" + masteredCount() + "</b><small>sudah ingat" + en("remembered") + "</small></div></div>" +
       '<button class="review" id="rev">🔁 Ulang Kaji Hari Ini<small>' + (due ? due + " soalan perlu diulang" : "10 soalan campuran") + "</small>" + en("Today's revision – " + (due ? due + " questions to go over again" : "10 mixed questions")) + "</button>" +
       '<div class="grid">';
@@ -178,6 +250,7 @@
     render(h + "</div>");
     on("[data-s]", function (el) { sfx.tap(); subject(SUBJECTS[+el.dataset.s]); });
     on("#set", settings);
+    on("#who", function () { sfx.tap(); who(); });
     on("#rev", function () { sfx.tap(); color("#FF6B6B"); runQuiz(reviewSet(), { title: "🔁 Ulang Kaji", back: home, again: function () { runQuiz(reviewSet(), this); } }); });
   }
 
@@ -386,20 +459,123 @@
     color();
     var nq = allPool().length, nt = 0; SUBJECTS.forEach(function (s) { nt += s.topics.length; });
     render(bar("⚙️ Tetapan") +
-      '<div class="panel"><label for="nm">Nama murid' + en("Pupil's name") + '</label><input type="text" id="nm" maxlength="20" value="' + esc(S.name) + '"></div>' +
+      '<div class="panel"><label for="nm">Nama murid' + en("Pupil's name") + '</label><input type="text" id="nm" maxlength="20" value="' + esc(ME.name) + '">' + avs(ME.av) +
+      '<button class="btn alt" id="swap">👥 Tukar atau tambah murid' + en("Switch or add a child") + "</button></div>" +
+      '<div class="panel"><b>Kod sandaran</b>' + en("Backup code") + "<small>Simpan kemajuan " + esc(ME.name) + " sebagai kod, untuk dipindahkan ke tablet lain atau disimpan sebagai salinan.</small>" +
+      en("Save this child's progress as a code, to move it to another tablet or keep as a copy.") +
+      '<button class="btn" id="bak">📤 Buat kod sandaran' + en("Make a backup code") + '</button><button class="btn alt" id="rest">📥 Pulihkan daripada kod' + en("Restore from a code") + "</button></div>" +
       '<div class="panel row"><div><b>Bunyi</b>' + en("Sound effects") + '</div><button class="tog' + (S.sound ? " on" : "") + '" id="snd" aria-label="Bunyi"></button></div>' +
-      '<div class="panel"><b>Bahasa Inggeris</b><br><small>Tekan butang 🇬🇧 di bahagian atas mana-mana halaman untuk menunjukkan atau menyembunyikan Bahasa Inggeris.</small>' + en("Tap the 🇬🇧 button at the top of any page to show or hide the English.") + "</div>" +
+      '<div class="panel"><b>Bahasa Inggeris</b><small>Tekan butang 🇬🇧 di bahagian atas mana-mana halaman untuk menunjukkan atau menyembunyikan Bahasa Inggeris.</small>' + en("Tap the 🇬🇧 button at the top of any page to show or hide the English.") + "</div>" +
       '<div class="panel"><b>Kemajuan</b>' + en("Progress") + "<small>" + nt + " topik · " + nq + " soalan · " + Object.keys(S.box).length + " sudah dicuba · " + masteredCount() + " sudah diingat</small>" +
       en(nt + " topics · " + nq + " questions · " + Object.keys(S.box).length + " tried · " + masteredCount() + " remembered") +
-      '<button class="btn warn" id="reset">Padam semua kemajuan' + en("Erase all progress") + "</button></div>" +
+      '<button class="btn warn" id="reset">Padam semua kemajuan' + en("Erase all progress") + '</button><button class="btn warn" id="del">Padam murid ini' + en("Delete this child") + "</button></div>" +
       '<div class="panel"><small>Kandungan berdasarkan KSSR (Semakan 2017) Tahun 2 – Sains dan Bahasa Melayu SK – serta asas KAFA (Akidah, Ibadah, Sirah, Adab, Jawi, Bahasa Arab, Tilawah al-Quran). Soalan boleh ditambah dalam folder <b>data/</b>.</small></div>');
-    on("#back", function () { S.name = $("#nm").value.trim(); save(); home(); });
+    function keep() { ME.name = $("#nm").value.trim().slice(0, 20) || ME.name; ME.av = avSel(); saveP(); }
+    avPick();
+    on("#back", function () { keep(); home(); });
+    on("#swap", function () { keep(); who(); });
+    on("#bak", function () { keep(); backup(); });
+    on("#rest", function () { keep(); restore(settings); });
     on("#snd", function (el) { S.sound = !S.sound; el.classList.toggle("on", S.sound); save(); sfx.ok(); });
     on("#reset", function () {
-      if (confirm("Padam semua bintang dan kemajuan? Tindakan ini tidak boleh dibatalkan.\n\nErase all stars and progress? This cannot be undone.")) { S.stars = {}; S.box = {}; S.streak = 0; S.last = 0; save(); home(); }
+      if (confirm("Padam semua bintang dan kemajuan " + ME.name + "? Tindakan ini tidak boleh dibatalkan.\n\nErase all stars and progress for this child? This cannot be undone.")) { S.stars = {}; S.box = {}; S.streak = 0; S.last = 0; save(); home(); }
+    });
+    on("#del", function () {
+      if (confirm("Padam " + ME.name + " dan semua kemajuannya dari peranti ini? Tindakan ini tidak boleh dibatalkan.\n\nDelete this child and all their progress from this device? This cannot be undone.")) { removeProfile(ME.id); who(); }
+    });
+  }
+
+  /* ---------- kod sandaran: kemajuan seorang murid sebagai teks, tanpa pelayan ---------- */
+  function b64(u) {
+    var s = "";
+    for (var i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192));
+    return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function unb64(s) {
+    s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "=";
+    var b = atob(s), u = new Uint8Array(b.length);
+    for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+    return u;
+  }
+  function pipe(u, T) { // mampat / nyahmampat dengan ciri terbina dalam pelayar
+    return Promise.resolve().then(function () {
+      return new Response(new Blob([u]).stream().pipeThrough(new T("deflate-raw"))).arrayBuffer();
+    }).then(function (b) { return new Uint8Array(b); });
+  }
+  function makeCode() {
+    var box = {}; for (var k in S.box) box[k] = [S.box[k].b, S.box[k].d];
+    var raw = new TextEncoder().encode(JSON.stringify({ v: 1, n: ME.name, a: ME.av, y: ME.year || YEAR, s: S.stars, b: box, k: S.streak, l: S.last }));
+    var plain = function () { return "JB0." + b64(raw); };
+    if (!window.CompressionStream) return Promise.resolve(plain());
+    return pipe(raw, window.CompressionStream).then(function (z) { return "JB1." + b64(z); }, plain);
+  }
+  function int(x, lo, hi) { x = Math.floor(+x); return x >= lo && x <= hi ? x : null; }
+  function readCode(code) {
+    return Promise.resolve().then(function () {
+      var m = /^JB([01])\.([A-Za-z0-9_-]+)$/.exec(String(code).replace(/\s+/g, ""));
+      if (!m) throw new Error("bad");
+      var u = unb64(m[2]);
+      if (m[1] === "0") return u;
+      if (!window.DecompressionStream) throw new Error("old");
+      return pipe(u, window.DecompressionStream);
+    }).then(function (u) {
+      var d = JSON.parse(new TextDecoder().decode(u)), st = fresh(), k, v;
+      if (!d || d.v !== 1 || typeof d.s !== "object" || typeof d.b !== "object") throw new Error("bad");
+      for (k in d.s) { v = int(d.s[k], 0, 3); if (v !== null) st.stars[k] = v; }
+      for (k in d.b) {
+        var b = int((d.b[k] || [])[0], 0, 5), day = int((d.b[k] || [])[1], 0, 1e6);
+        if (b !== null && day !== null) st.box[k] = { b: b, d: day };
+      }
+      st.streak = int(d.k, 0, 1e5) || 0; st.last = int(d.l, 0, 1e6) || 0;
+      return { name: d.n, av: d.a, state: st };
+    });
+  }
+
+  function backup() {
+    color();
+    render(bar("📤 Kod sandaran", " ") + '<div class="panel"><b>Kod untuk ' + esc(ME.name) + "</b>" + en("Code for this child") +
+      "<small>Salin kod ini dan simpan di tempat selamat, contohnya hantar kepada diri sendiri melalui WhatsApp atau e-mel. Pada tablet lain, buka Jom Belajar, tekan “Ada kod sandaran?” dan tampal kod ini.</small>" +
+      en("Copy this code and keep it somewhere safe, for example send it to yourself by WhatsApp or email. On another tablet, open Jom Belajar, tap “Ada kod sandaran?” and paste the code.") +
+      '<textarea class="code" id="code" readonly rows="6">Sedang menyediakan…</textarea>' +
+      '<button class="btn" id="copy">📋 Salin kod' + en("Copy the code") + "</button>" +
+      (navigator.share ? '<button class="btn alt" id="share">Kongsi…' + en("Share…") + "</button>" : "") +
+      '<p class="msg" id="msg"></p></div>' +
+      '<div class="panel"><small>Kod ini ialah salinan kemajuan pada saat ini sahaja. Buat kod baharu jika mahu salinan yang terkini.</small>' + en("The code is a copy of the progress at this moment only. Make a new code when you want an up-to-date copy.") + "</div>");
+    var ta = $("#code"), code = "";
+    makeCode().then(function (c) { code = c; if (ta.isConnected) ta.value = c; });
+    function say(bm, e) { $("#msg").innerHTML = esc(bm) + en(e); }
+    on("#back", settings);
+    on("#copy", function () {
+      if (!code) return;
+      var done = function () { say("Sudah disalin ✔", "Copied"); sfx.ok(); };
+      var manual = function () { ta.focus(); ta.select(); try { if (document.execCommand("copy")) return done(); } catch (e) {} say("Tekan lama pada kod untuk menyalin.", "Press and hold the code to copy it."); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(done, manual); else manual();
+    });
+    on("#share", function () { if (code) navigator.share({ title: "Jom Belajar – " + ME.name, text: code }).catch(function () {}); });
+  }
+
+  function restore(back) {
+    color();
+    render(bar("📥 Pulihkan", " ") + '<div class="panel"><label for="code">Tampal kod sandaran di sini' + en("Paste the backup code here") + "</label>" +
+      '<textarea class="code" id="code" rows="6" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="JB1...."></textarea>' +
+      "<small>Murid dalam kod ini akan ditambah sebagai murid baharu. Tiada apa-apa yang sedia ada akan dipadam.</small>" +
+      en("The child in this code is added as a new child. Nothing already on this device is erased.") +
+      '<button class="btn" id="go">Pulihkan' + en("Restore") + '</button><p class="msg" id="msg"></p></div>');
+    on("#back", back);
+    on("#go", function () {
+      var eng = S.eng;
+      readCode($("#code").value).then(function (r) {
+        use(addProfile(r.name, r.av, r.state)); S.eng = eng; save(); applyEng(); sfx.win(); home();
+      }, function (e) {
+        var old = e && e.message === "old";
+        $("#msg").innerHTML = (old ? "Pelayar ini terlalu lama untuk membaca kod ini. Sila kemas kini tablet." : "Kod ini tidak sah. Pastikan seluruh kod disalin.") +
+          en(old ? "This browser is too old to read this code. Please update the tablet." : "This code is not valid. Make sure the whole code was copied.");
+        sfx.bad();
+      });
     });
   }
 
   applyEng();
+  if (P.list.length === 1) use(P.list[0].id);
   home();
 })();
