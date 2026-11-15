@@ -1,26 +1,51 @@
-/* Jom Belajar – enjin permainan. Kandungan berada dalam folder data/. */
+/* Jom Belajar – enjin permainan. Kandungan berada dalam folder data/.
+   Bahasa Inggeris sentiasa ada dalam halaman (kelas "en") tetapi tersembunyi;
+   butang 🇬🇧 di atas hanya menunjukkan atau menyembunyikannya. */
 (function () {
   "use strict";
   var app = document.getElementById("app");
   var KEY = "jom-belajar-v1";
-  var DEF = { name: "", asked: false, stars: {}, box: {}, streak: 0, last: 0, en: true, sound: true };
+  var DEF = { name: "", asked: false, stars: {}, box: {}, streak: 0, last: 0, eng: false, sound: true };
   var S;
   try { S = Object.assign({}, DEF, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) { S = Object.assign({}, DEF); }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 
   var SUBJECTS = window.SUBJECTS || [];
+  var EN = window.EN || {};
   var AR = /[؀-ۿݐ-ݿ]/;
   var INTERVALS = [0, 1, 2, 4, 7, 14]; // hari sebelum soalan muncul semula (kotak Leitner)
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function txt(s) { return AR.test(s) ? '<span class="ar" dir="auto">' + esc(s) + "</span>" : esc(s); }
   function shuffle(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
-  function arr(x) { return x ? (Array.isArray(x) && !(x.length && typeof x[0] === "string") ? x : [x]) : []; }
+  function arr(x) { return x ? (Array.isArray(x) ? x : [x]) : []; }
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
   function today() { var d = new Date(); return Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 864e5); }
   function $(s) { return app.querySelector(s); }
   function on(sel, fn) { Array.prototype.forEach.call(app.querySelectorAll(sel), function (el) { el.addEventListener("click", function (e) { fn(el, e); }); }); }
   function render(html) { app.innerHTML = html; window.scrollTo(0, 0); }
+
+  /* ---------- Bahasa Inggeris ---------- */
+  // Cari terjemahan tulisan tangan dalam data/en.js. Tiada terjemahan = tiada apa-apa dipaparkan.
+  function tr(s) {
+    var core = String(s).replace(/^[^A-Za-z0-9']+/, ""), e = EN[core.toLowerCase()];
+    if (!e) return "";
+    var c = core.charAt(0);
+    return c !== c.toLowerCase() ? e.charAt(0).toUpperCase() + e.slice(1) : e;
+  }
+  function en(e) { return e ? '<span class="en">' + esc(e) + "</span>" : ""; }
+  function bi(s, skip) { return txt(s) + (skip ? "" : en(tr(s))); } // Melayu dahulu, Inggeris di bawah
+  function applyEng() {
+    document.body.classList.toggle("eng", !!S.eng);
+    var b = document.getElementById("eng");
+    b.setAttribute("aria-pressed", S.eng ? "true" : "false");
+  }
+  (function () {
+    var b = document.createElement("button");
+    b.id = "eng"; b.textContent = "🇬🇧"; b.setAttribute("aria-label", "Tunjuk Bahasa Inggeris / Show English");
+    b.addEventListener("click", function () { S.eng = !S.eng; save(); applyEng(); sfx.tap(); });
+    document.body.appendChild(b);
+  })();
 
   /* ---------- bunyi & suara ---------- */
   var ac;
@@ -81,21 +106,23 @@
     return g;
   }
   function tkey(sub, top) { return sub.id + "." + top.id; }
+  // Bahasa Melayu: pilihan jawapan tidak diterjemah, supaya butang 🇬🇧 tidak membocorkan jawapan.
+  function hideAns(sub) { return sub.id === "bm"; }
   function pool(sub, top, only) {
-    var out = [], base = tkey(sub, top);
+    var out = [], base = tkey(sub, top), skip = hideAns(sub);
     if (!only || only === "q") (top.q || []).forEach(function (x, i) {
-      out.push({ key: base + "|q" + i, q: x[0], en: x[1], opts: x[2].slice(), ans: x[2][0], why: x[3] || "", sub: sub, top: top });
+      out.push({ key: base + "|q" + i, q: x[0], en: x[1], opts: x[2].slice(), ans: x[2][0], why: x[3] || "", sub: sub, top: top, skip: skip });
     });
     if (!only || only === "p") arr(top.pairs).forEach(function (P, pi) {
       P.items.forEach(function (x, i) {
         var others = shuffle(uniq(P.items.map(function (y) { return y[1]; }).filter(function (y) { return y !== x[1]; }))).slice(0, 3);
         if (!others.length) return;
-        out.push({ key: base + "|p" + pi + "_" + i, q: P.ask, en: P.en, big: x[0], opts: [x[1]].concat(others), ans: x[1], why: "", sub: sub, top: top, speakAr: P.speakAr });
+        out.push({ key: base + "|p" + pi + "_" + i, q: P.ask, en: P.en, big: x[0], opts: [x[1]].concat(others), ans: x[1], why: "", sub: sub, top: top, speakAr: P.speakAr, skip: skip });
       });
     });
     if (!only || only === "s") arr(top.sort).forEach(function (T, ti) {
       T.items.forEach(function (x, i) {
-        out.push({ key: base + "|s" + ti + "_" + i, q: T.ask, en: T.en, big: x[0], opts: T.cats.slice(), ans: T.cats[x[1]], why: "", fixed: true, sub: sub, top: top });
+        out.push({ key: base + "|s" + ti + "_" + i, q: T.ask, en: T.en, big: x[0], opts: T.cats.slice(), ans: T.cats[x[1]], why: "", fixed: true, sub: sub, top: top, skip: skip });
       });
     });
     return out;
@@ -129,9 +156,9 @@
 
   function welcome() {
     color();
-    render('<div class="welcome"><div class="mascot">🦉</div><h1>Selamat datang!</h1><p>Siapa nama awak?</p>' +
+    render('<div class="welcome"><div class="mascot">🦉</div><h1>Selamat datang!' + en("Welcome!") + "</h1><p>Siapa nama awak?" + en("What is your name?") + "</p>" +
       '<div class="panel" style="margin-top:20px"><input type="text" id="nm" placeholder="Nama saya..." maxlength="20" autocomplete="off"></div>' +
-      '<button class="btn" id="go">Jom mula! 🚀</button></div>');
+      '<button class="btn" id="go">Jom mula! 🚀' + en("Let's start!") + "</button></div>");
     on("#go", function () { S.name = $("#nm").value.trim(); S.asked = true; save(); home(); });
   }
 
@@ -139,14 +166,14 @@
     if (!S.asked) return welcome();
     color();
     var due = dueCount();
-    var h = '<div class="hello"><div class="mascot">🦉</div><div class="grow"><h1>Hai, ' + esc(S.name || "kawan") + '! 👋</h1><p>Jom belajar sambil bermain.</p></div><button class="round" id="set" aria-label="Tetapan">⚙️</button></div>' +
-      '<div class="stats"><div>⭐ <b>' + totalStars() + '</b><small>bintang</small></div><div>🔥 <b>' + (S.last >= today() - 1 ? S.streak : 0) + '</b><small>hari berturut-turut</small></div><div>🧠 <b>' + masteredCount() + '</b><small>sudah ingat</small></div></div>' +
-      '<button class="review" id="rev">🔁 Ulang Kaji Hari Ini<small>' + (due ? due + " soalan perlu diulang" : "10 soalan campuran") + (S.en ? " · Today's revision" : "") + "</small></button>" +
+    var h = '<div class="hello"><div class="mascot">🦉</div><div class="grow"><h1>Hai, ' + esc(S.name || "kawan") + "! 👋</h1><p>Jom belajar sambil bermain." + en("Let's learn while we play.") + '</p></div><button class="round" id="set" aria-label="Tetapan">⚙️</button></div>' +
+      '<div class="stats"><div>⭐ <b>' + totalStars() + "</b><small>bintang" + en("stars") + "</small></div><div>🔥 <b>" + (S.last >= today() - 1 ? S.streak : 0) + "</b><small>hari berturut-turut" + en("days in a row") + "</small></div><div>🧠 <b>" + masteredCount() + "</b><small>sudah ingat" + en("remembered") + "</small></div></div>" +
+      '<button class="review" id="rev">🔁 Ulang Kaji Hari Ini<small>' + (due ? due + " soalan perlu diulang" : "10 soalan campuran") + "</small>" + en("Today's revision – " + (due ? due + " questions to go over again" : "10 mixed questions")) + "</button>" +
       '<div class="grid">';
     SUBJECTS.forEach(function (s, i) {
       var got = 0, max = 0;
       s.topics.forEach(function (t) { gamesOf(t).forEach(function (g) { max += 3; got += S.stars[tkey(s, t) + ":" + g] || 0; }); });
-      h += '<button class="card big" data-s="' + i + '" style="--c:' + s.color + '"><span class="ic">' + s.icon + "</span><span><b>" + esc(s.name) + "</b>" + (S.en ? "<small>" + esc(s.en) + "</small>" : "") + '<span class="st">⭐ ' + got + " / " + max + "</span></span></button>";
+      h += '<button class="card big" data-s="' + i + '" style="--c:' + s.color + '"><span class="ic">' + s.icon + "</span><span><b>" + esc(s.name) + "</b>" + en(s.en) + '<span class="st">⭐ ' + got + " / " + max + "</span></span></button>";
     });
     render(h + "</div>");
     on("[data-s]", function (el) { sfx.tap(); subject(SUBJECTS[+el.dataset.s]); });
@@ -160,7 +187,7 @@
     sub.topics.forEach(function (t, i) {
       var g = gamesOf(t), got = 0;
       g.forEach(function (x) { got += S.stars[tkey(sub, t) + ":" + x] || 0; });
-      h += '<button class="card" data-t="' + i + '"><span class="ic">' + t.icon + "</span><span><b>" + esc(t.t) + "</b>" + (S.en ? "<small>" + esc(t.en) + "</small>" : "") + '<span class="st">⭐ ' + got + " / " + g.length * 3 + "</span></span></button>";
+      h += '<button class="card" data-t="' + i + '"><span class="ic">' + t.icon + "</span><span><b>" + esc(t.t) + "</b>" + en(t.en) + '<span class="st">⭐ ' + got + " / " + g.length * 3 + "</span></span></button>";
     });
     render(h + "</div>");
     on("#back", home);
@@ -176,10 +203,10 @@
   function topic(sub, top) {
     color(sub.color);
     var base = tkey(sub, top), back = function () { topic(sub, top); };
-    var h = bar(sub.icon + " " + esc(sub.name)) + '<div class="thead"><div class="ic">' + top.icon + "</div><h2>" + esc(top.t) + "</h2>" + (S.en ? "<p>" + esc(top.en) + "</p>" : "") + '</div><div class="games">' +
-      '<button class="game learn" data-g="belajar"><span class="ic">📖</span><span><b>Belajar dulu</b>' + (S.en ? "<small>Read the notes first</small>" : "") + "</span></button>";
+    var h = bar(sub.icon + " " + esc(sub.name)) + '<div class="thead"><div class="ic">' + top.icon + "</div><h2>" + esc(top.t) + "</h2>" + en(top.en) + '</div><div class="games">' +
+      '<button class="game learn" data-g="belajar"><span class="ic">📖</span><span><b>Belajar dulu</b>' + en("Read the notes first") + "</span></button>";
     gamesOf(top).forEach(function (g) {
-      h += '<button class="game" data-g="' + g + '"><span class="ic">' + GAME[g][0] + "</span><span><b>" + GAME[g][1] + "</b>" + (S.en ? "<small>" + GAME[g][2] + "</small>" : "") + '</span><span class="st">' + starStr(S.stars[base + ":" + g] || 0) + "</span></button>";
+      h += '<button class="game" data-g="' + g + '"><span class="ic">' + GAME[g][0] + "</span><span><b>" + GAME[g][1] + "</b>" + en(GAME[g][2]) + '</span><span class="st">' + starStr(S.stars[base + ":" + g] || 0) + "</span></button>";
     });
     render(h + "</div>");
     on("#back", function () { subject(sub); });
@@ -199,30 +226,33 @@
   }
 
   function learn(sub, top) {
-    var h = bar("📖 " + esc(top.t));
+    var skip = hideAns(sub), h = bar("📖 " + esc(top.t));
+    function head(P) { var t = P.title || P.ask; return '<h2 class="sect">' + esc(t) + en(tr(t) || P.en) + "</h2>"; }
     (top.notes || []).forEach(function (n, i) {
-      h += '<div class="note"><div class="em">' + (n[2] || "💡") + '</div><div class="tx"><div>' + txt(n[0]) + "</div>" + (S.en && n[1] ? '<div class="en">' + esc(n[1]) + "</div>" : "") + "</div>" +
+      h += '<div class="note"><div class="em">' + (n[2] || "💡") + '</div><div class="tx"><div>' + txt(n[0]) + "</div>" + en(n[1]) + "</div>" +
         (canSpeak && !AR.test(n[0]) ? '<button class="icon" data-say="' + i + '" aria-label="Dengar">🔊</button>' : "") + "</div>";
     });
     arr(top.pairs).forEach(function (P) {
-      h += '<h2 class="sect">' + esc(P.title || P.ask) + '</h2><table class="tb">' + P.items.map(function (x) { return "<tr><td>" + txt(x[0]) + "</td><td>" + txt(x[1]) + "</td></tr>"; }).join("") + "</table>";
+      h += head(P) + '<table class="tb">' + P.items.map(function (x) { return "<tr><td>" + bi(x[0], skip) + "</td><td>" + bi(x[1], skip) + "</td></tr>"; }).join("") + "</table>";
     });
     arr(top.sort).forEach(function (T) {
-      h += '<h2 class="sect">' + esc(T.title || T.ask) + '</h2><table class="tb">' + T.cats.map(function (c, ci) {
-        return "<tr><td>" + esc(c) + "</td><td>" + T.items.filter(function (x) { return x[1] === ci; }).map(function (x) { return txt(x[0]); }).join(", ") + "</td></tr>";
+      h += head(T) + '<table class="tb">' + T.cats.map(function (c, ci) {
+        var its = T.items.filter(function (x) { return x[1] === ci; }).map(function (x) { return x[0]; });
+        return "<tr><td>" + bi(c, skip) + "</td><td>" + its.map(txt).join(", ") + (skip ? "" : en(its.map(tr).filter(Boolean).join(", "))) + "</td></tr>";
       }).join("") + "</table>";
     });
     (top.order || []).forEach(function (o) {
       if (o[3] === "ayat") return;
-      h += '<h2 class="sect">' + esc(o[0]) + '</h2><table class="tb">' + o[2].map(function (x, i) { return "<tr><td style='width:60px'>" + (i + 1) + "</td><td>" + txt(x) + "</td></tr>"; }).join("") + "</table>";
+      h += '<h2 class="sect">' + esc(o[0]) + en(o[1]) + '</h2><table class="tb">' + o[2].map(function (x, i) { return "<tr><td style='width:60px'>" + (i + 1) + "</td><td>" + bi(x, skip) + "</td></tr>"; }).join("") + "</table>";
     });
-    render(h + '<button class="btn" id="play">Saya sudah sedia! ▶</button>');
+    render(h + '<button class="btn" id="play">Saya sudah sedia! ▶' + en("I'm ready!") + "</button>");
     on("#back", function () { topic(sub, top); });
     on("#play", function () { topic(sub, top); });
     on("[data-say]", function (el) { speak(top.notes[+el.dataset.say][0]); });
   }
 
   /* ---------- kuiz (juga digunakan untuk Kelaskan & Ulang Kaji) ---------- */
+  var PRAISE = [["Betul! 🎉", "Correct!"], ["Hebat! 🌟", "Great!"], ["Pandai! 👏", "Clever!"], ["Syabas! 💪", "Well done!"]];
   function runQuiz(items, o) {
     var i = 0, score = 0;
     if (!items.length) return o.back();
@@ -232,12 +262,10 @@
       color(it.sub.color);
       render(bar(o.title, (i + 1) + " / " + items.length) + '<div class="prog"><i style="width:' + (i / items.length * 100) + '%"></i></div>' +
         '<div class="qcard"><div class="qtop"><span class="tag">' + it.sub.icon + " " + esc(it.top.t) + "</span>" + (canSpeak ? '<button class="icon" id="spk" aria-label="Dengar">🔊</button>' : "<span></span>") + "</div>" +
-        '<p class="q">' + txt(it.q) + "</p>" + (it.big ? '<div class="bigw">' + txt(it.big) + "</div>" : "") +
-        (S.en && it.en ? '<button class="hint" id="hint">💡 English</button><p class="en" id="en" hidden>' + esc(it.en) + "</p>" : "") + "</div>" +
-        '<div class="opts' + (long ? " long" : "") + '">' + opts.map(function (x, k) { return '<button class="opt" data-k="' + k + '">' + txt(x) + "</button>"; }).join("") + "</div>" +
+        '<p class="q">' + txt(it.q) + "</p>" + en(it.en) + (it.big ? '<div class="bigw">' + txt(it.big) + "</div>" + (it.skip ? "" : en(tr(it.big))) : "") + "</div>" +
+        '<div class="opts' + (long ? " long" : "") + '">' + opts.map(function (x, k) { return '<button class="opt" data-k="' + k + '">' + bi(x, it.skip) + "</button>"; }).join("") + "</div>" +
         '<div class="fb" id="fb"></div>');
       on("#back", o.back);
-      on("#hint", function (el) { el.hidden = true; $("#en").hidden = false; });
       on("#spk", function () {
         if (it.big && AR.test(it.big)) { if (it.speakAr) speak(it.big, true); else speak(it.q); }
         else speak(it.q + (it.big ? " " + it.big : ""));
@@ -248,13 +276,14 @@
         if (!ok) el.classList.add("bad");
         if (ok) { score++; sfx.ok(); } else sfx.bad();
         mark(it.key, ok);
-        var fb = $("#fb"), last = i === items.length - 1;
+        var fb = $("#fb"), last = i === items.length - 1, p = PRAISE[Math.floor(Math.random() * PRAISE.length)];
         fb.className = "fb show " + (ok ? "ok" : "bad");
-        fb.innerHTML = "<b>" + (ok ? ["Betul! 🎉", "Hebat! 🌟", "Pandai! 👏", "Syabas! 💪"][Math.floor(Math.random() * 4)] : "Belum betul 🙂") + "</b>" +
-          (ok ? "" : "<div>Jawapan: <b style='display:inline;font-size:1em'>" + txt(it.ans) + "</b></div>") + (it.why ? "<div>" + esc(it.why) + "</div>" : "") +
-          '<button class="btn" id="next">' + (last ? "Tamat 🏁" : "Seterusnya →") + "</button>";
+        fb.innerHTML = "<b>" + (ok ? p[0] + en(p[1]) : "Belum betul 🙂" + en("Not quite")) + "</b>" +
+          (ok ? "" : "<div>Jawapan: <b class='inl'>" + txt(it.ans) + "</b>" + en("Answer" + (it.skip || !tr(it.ans) ? "" : ": " + tr(it.ans))) + "</div>") +
+          (it.why ? "<div>" + esc(it.why) + en(tr(it.why)) + "</div>" : "") +
+          '<button class="btn" id="next">' + (last ? "Tamat 🏁" + en("Finish") : "Seterusnya →" + en("Next")) + "</button>";
         fb.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        on("#next", function () { i++; if (i < items.length) show(); else result(score / items.length, score + " / " + items.length + " betul", o); });
+        on("#next", function () { i++; if (i < items.length) show(); else result(score / items.length, score + " / " + items.length + " betul", score + " / " + items.length + " correct", o); });
       });
     }
     show();
@@ -262,22 +291,22 @@
 
   /* ---------- padankan ---------- */
   function runMatch(sub, top, back) {
-    var base = tkey(sub, top), sets = arr(top.pairs), pi = Math.floor(Math.random() * sets.length), P = sets[pi];
+    var base = tkey(sub, top), sets = arr(top.pairs), pi = Math.floor(Math.random() * sets.length), P = sets[pi], skip = hideAns(sub);
     var picked = [], seenL = {}, seenR = {};
     shuffle(P.items.map(function (x, i) { return { l: x[0], r: x[1], i: i }; })).forEach(function (x) {
       if (picked.length < 5 && !seenL[x.l] && !seenR[x.r]) { picked.push(x); seenL[x.l] = seenR[x.r] = 1; }
     });
     var L = shuffle(picked), R = shuffle(picked), sel = null, done = 0, miss = 0, missed = {};
-    render(bar("🧩 " + esc(top.t)) + '<p class="tip">Tekan satu di kiri, kemudian padanannya di kanan.' + (S.en ? "<br><span class='en'>Tap one on the left, then its match on the right.</span>" : "") + "</p>" +
-      '<div class="cols"><div class="col">' + L.map(function (x) { return '<button class="tile" data-side="l" data-i="' + x.i + '">' + txt(x.l) + "</button>"; }).join("") +
-      '</div><div class="col">' + R.map(function (x) { return '<button class="tile" data-side="r" data-i="' + x.i + '">' + txt(x.r) + "</button>"; }).join("") + "</div></div>");
+    render(bar("🧩 " + esc(top.t)) + '<p class="tip">Tekan satu di kiri, kemudian padanannya di kanan.' + en("Tap one on the left, then its match on the right.") + "</p>" +
+      '<div class="cols"><div class="col">' + L.map(function (x) { return '<button class="tile" data-side="l" data-i="' + x.i + '">' + bi(x.l, skip) + "</button>"; }).join("") +
+      '</div><div class="col">' + R.map(function (x) { return '<button class="tile" data-side="r" data-i="' + x.i + '">' + bi(x.r, skip) + "</button>"; }).join("") + "</div></div>");
     on("#back", back);
     on(".tile", function (el) {
       if (el.classList.contains("done")) return;
       if (!sel || sel.dataset.side === el.dataset.side) {
         if (sel) sel.classList.remove("sel");
         sel = el; el.classList.add("sel"); sfx.tap();
-        if (el.dataset.side === "l" && P.speakAr) speak(el.textContent, true);
+        if (el.dataset.side === "l" && P.speakAr) speak(P.items[+el.dataset.i][0], true);
         return;
       }
       var a = sel; sel = null; a.classList.remove("sel");
@@ -285,7 +314,7 @@
         a.classList.add("done"); el.classList.add("done"); sfx.ok(); done++;
         mark(base + "|p" + pi + "_" + a.dataset.i, !missed[a.dataset.i]);
         if (done === picked.length) setTimeout(function () {
-          result(miss === 0 ? 1 : miss <= 2 ? 0.7 : 0.3, miss ? miss + " kali tersilap" : "Tiada kesilapan!", { back: back, star: base + ":padan", again: function () { runMatch(sub, top, back); } });
+          result(miss === 0 ? 1 : miss <= 2 ? 0.7 : 0.3, miss ? miss + " kali tersilap" : "Tiada kesilapan!", miss ? miss + " mistake" + (miss > 1 ? "s" : "") : "No mistakes!", { back: back, star: base + ":padan", again: function () { runMatch(sub, top, back); } });
         }, 500);
       } else {
         miss++; missed[a.dataset.i] = missed[el.dataset.i] = 1; sfx.bad();
@@ -297,7 +326,7 @@
 
   /* ---------- susun ---------- */
   function runOrder(sub, top, back) {
-    var base = tkey(sub, top), list = shuffle(top.order).slice(0, 5), n = 0, perfect = 0;
+    var base = tkey(sub, top), list = shuffle(top.order).slice(0, 5), n = 0, perfect = 0, skip = hideAns(sub);
     function show() {
       var o = list[n], ans = o[2], isAyat = o[3] === "ayat";
       var v = !isAyat && ans.some(function (x) { return x.length > 12; });
@@ -306,20 +335,20 @@
       function draw(state) {
         var good = state === "good";
         render(bar("🔢 " + esc(top.t), (n + 1) + " / " + list.length) + '<div class="prog"><i style="width:' + (n / list.length * 100) + '%"></i></div>' +
-          '<div class="qcard"><p class="q">' + esc(o[0]) + "</p>" + (S.en && o[1] ? '<p class="en">' + esc(o[1]) + "</p>" : "") + "</div>" +
-          '<div class="slots' + (v ? " v" : "") + (good ? " good" : "") + '">' + placed.map(function (bi, k) {
-            return '<button class="chip' + (state === "bad" && ans[bi] !== ans[k] ? " wrong" : "") + '" data-p="' + k + '">' + (v ? '<span class="num">' + (k + 1) + "</span>" : "") + txt(ans[bi]) + "</button>";
+          '<div class="qcard"><p class="q">' + esc(o[0]) + "</p>" + en(o[1]) + "</div>" +
+          '<div class="slots' + (v ? " v" : "") + (good ? " good" : "") + '">' + placed.map(function (bi2, k) {
+            return '<button class="chip' + (state === "bad" && ans[bi2] !== ans[k] ? " wrong" : "") + '" data-p="' + k + '">' + (v ? '<span class="num">' + (k + 1) + "</span>" : "") + bi(ans[bi2], skip || isAyat) + "</button>";
           }).join("") + "</div>" +
-          '<div class="bank' + (v ? " v" : "") + '">' + bank.filter(function (bi) { return placed.indexOf(bi) < 0; }).map(function (bi) { return '<button class="chip" data-b="' + bi + '">' + txt(ans[bi]) + "</button>"; }).join("") + "</div>" +
-          (good ? '<div class="fb show ok"><b>Betul! 🎉</b><button class="btn" id="next">' + (n === list.length - 1 ? "Tamat 🏁" : "Seterusnya →") + "</button></div>" :
-            placed.length === ans.length ? '<button class="btn" id="chk">Semak ✔</button>' : "") +
-          (!good && tries >= 2 ? '<button class="btn alt" id="showans">Tunjuk jawapan 👀</button>' : ""));
+          '<div class="bank' + (v ? " v" : "") + '">' + bank.filter(function (b) { return placed.indexOf(b) < 0; }).map(function (b) { return '<button class="chip" data-b="' + b + '">' + bi(ans[b], skip || isAyat) + "</button>"; }).join("") + "</div>" +
+          (good ? '<div class="fb show ok"><b>Betul! 🎉' + en("Correct!") + '</b><button class="btn" id="next">' + (n === list.length - 1 ? "Tamat 🏁" + en("Finish") : "Seterusnya →" + en("Next")) + "</button></div>" :
+            placed.length === ans.length ? '<button class="btn" id="chk">Semak ✔' + en("Check") + "</button>" : "") +
+          (!good && tries >= 2 ? '<button class="btn alt" id="showans">Tunjuk jawapan 👀' + en("Show the answer") + "</button>" : ""));
         on("#back", back);
-        if (good) { on("#next", function () { n++; if (n < list.length) show(); else result(perfect / list.length, perfect + " / " + list.length + " betul kali pertama", { back: back, star: base + ":susun", again: function () { runOrder(sub, top, back); } }); }); return; }
+        if (good) { on("#next", function () { n++; if (n < list.length) show(); else result(perfect / list.length, perfect + " / " + list.length + " betul kali pertama", perfect + " / " + list.length + " correct on the first try", { back: back, star: base + ":susun", again: function () { runOrder(sub, top, back); } }); }); return; }
         on("[data-b]", function (el) { sfx.tap(); placed.push(+el.dataset.b); draw(); });
         on("[data-p]", function (el) { placed.splice(+el.dataset.p, 1); draw(); });
         on("#chk", function () {
-          var ok = placed.every(function (bi, k) { return ans[bi] === ans[k]; });
+          var ok = placed.every(function (b, k) { return ans[b] === ans[k]; });
           if (ok) { if (tries === 0) perfect++; sfx.ok(); if (isAyat) speak(ans.join(" ")); draw("good"); }
           else { tries++; sfx.bad(); draw("bad"); }
         });
@@ -331,12 +360,12 @@
   }
 
   /* ---------- keputusan ---------- */
-  function result(pct, line, o) {
+  var RESULT = [["Cuba lagi ya! 💪", "Try again!"], ["Boleh baiki lagi! 🙂", "You can do even better!"], ["Bagus! 👍", "Good!"], ["Hebat sekali! 🏆", "Excellent!"]];
+  function result(pct, line, lineEn, o) {
     var stars = pct >= 0.9 ? 3 : pct >= 0.6 ? 2 : pct > 0 ? 1 : 0;
     setStars(o.star, stars); bumpStreak();
-    var msg = ["Cuba lagi ya! 💪", "Boleh baiki lagi! 🙂", "Bagus! 👍", "Hebat sekali! 🏆"][stars];
-    render('<div class="result"><div class="stars">' + [0, 1, 2].map(function (k) { return '<span class="' + (k < stars ? "" : "dim") + '">⭐</span>'; }).join("") + "</div><h2>" + msg + "</h2><p>" + esc(line) + "</p>" +
-      '<button class="btn" id="again">Main lagi 🔄</button><button class="btn alt" id="done">Kembali</button></div>');
+    render('<div class="result"><div class="stars">' + [0, 1, 2].map(function (k) { return '<span class="' + (k < stars ? "" : "dim") + '">⭐</span>'; }).join("") + "</div><h2>" + RESULT[stars][0] + en(RESULT[stars][1]) + "</h2><p>" + esc(line) + en(lineEn) + "</p>" +
+      '<button class="btn" id="again">Main lagi 🔄' + en("Play again") + '</button><button class="btn alt" id="done">Kembali' + en("Back") + "</button></div>");
     if (stars >= 2) { sfx.win(); confetti(); } else sfx.tap();
     on("#again", function () { o.again.call(o); });
     on("#done", o.back);
@@ -357,19 +386,20 @@
     color();
     var nq = allPool().length, nt = 0; SUBJECTS.forEach(function (s) { nt += s.topics.length; });
     render(bar("⚙️ Tetapan") +
-      '<div class="panel"><label for="nm">Nama murid</label><input type="text" id="nm" maxlength="20" value="' + esc(S.name) + '"></div>' +
-      '<div class="panel row"><div><b>Bantuan Bahasa Inggeris</b><br><small>Show English hints and translations</small></div><button class="tog' + (S.en ? " on" : "") + '" id="en" aria-label="English"></button></div>' +
-      '<div class="panel row"><div><b>Bunyi</b><br><small>Sound effects</small></div><button class="tog' + (S.sound ? " on" : "") + '" id="snd" aria-label="Bunyi"></button></div>' +
-      '<div class="panel"><b>Kemajuan</b><br><small>' + nt + " topik · " + nq + " soalan · " + Object.keys(S.box).length + " sudah dicuba · " + masteredCount() + " sudah diingat (betul 3 kali berturut-turut pada hari berlainan)</small>" +
-      '<button class="btn warn" id="reset">Padam semua kemajuan</button></div>' +
+      '<div class="panel"><label for="nm">Nama murid' + en("Pupil's name") + '</label><input type="text" id="nm" maxlength="20" value="' + esc(S.name) + '"></div>' +
+      '<div class="panel row"><div><b>Bunyi</b>' + en("Sound effects") + '</div><button class="tog' + (S.sound ? " on" : "") + '" id="snd" aria-label="Bunyi"></button></div>' +
+      '<div class="panel"><b>Bahasa Inggeris</b><br><small>Tekan butang 🇬🇧 di bahagian atas mana-mana halaman untuk menunjukkan atau menyembunyikan Bahasa Inggeris.</small>' + en("Tap the 🇬🇧 button at the top of any page to show or hide the English.") + "</div>" +
+      '<div class="panel"><b>Kemajuan</b>' + en("Progress") + "<small>" + nt + " topik · " + nq + " soalan · " + Object.keys(S.box).length + " sudah dicuba · " + masteredCount() + " sudah diingat</small>" +
+      en(nt + " topics · " + nq + " questions · " + Object.keys(S.box).length + " tried · " + masteredCount() + " remembered") +
+      '<button class="btn warn" id="reset">Padam semua kemajuan' + en("Erase all progress") + "</button></div>" +
       '<div class="panel"><small>Kandungan berdasarkan KSSR (Semakan 2017) Tahun 2 – Sains dan Bahasa Melayu SK – serta asas KAFA (Akidah, Ibadah, Sirah, Adab, Jawi, Bahasa Arab, Tilawah al-Quran). Soalan boleh ditambah dalam folder <b>data/</b>.</small></div>');
     on("#back", function () { S.name = $("#nm").value.trim(); save(); home(); });
-    on("#en", function (el) { S.en = !S.en; el.classList.toggle("on", S.en); save(); });
     on("#snd", function (el) { S.sound = !S.sound; el.classList.toggle("on", S.sound); save(); sfx.ok(); });
     on("#reset", function () {
-      if (confirm("Padam semua bintang dan kemajuan? Tindakan ini tidak boleh dibatalkan.")) { S.stars = {}; S.box = {}; S.streak = 0; S.last = 0; save(); home(); }
+      if (confirm("Padam semua bintang dan kemajuan? Tindakan ini tidak boleh dibatalkan.\n\nErase all stars and progress? This cannot be undone.")) { S.stars = {}; S.box = {}; S.streak = 0; S.last = 0; save(); home(); }
     });
   }
 
+  applyEng();
   home();
 })();

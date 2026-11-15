@@ -117,13 +117,13 @@ window.SUBJECTS.push({
         ["saya", "I (sopan)"], ["awak", "you"], ["dia", "he / she"], ["mereka", "they"], ["kami", "we (bukan kamu)"], ["kita", "we (semua)"], ["beliau", "he / she (dihormati)"]
       ] },
       q: [
-        ["Nama ___ ialah Imran. Saya berumur lapan tahun.", "My name is Imran. I am eight years old.", ["saya", "dia", "mereka", "beliau"]],
-        ["Itu Siti. ___ kawan baik saya.", "That is Siti. She is my best friend.", ["Dia", "Kami", "Mereka", "Kita"]],
-        ["Ali dan Abu bermain bola. ___ sangat gembira.", "Ali and Abu play football. They are very happy.", ["Mereka", "Dia", "Saya", "Beliau"]],
-        ["“Mari ___ pergi ke kantin bersama-sama,” kata Mei kepada Ana.", "'Let us go to the canteen together,' said Mei to Ana.", ["kita", "kami", "mereka", "dia"], "Kita = saya dan kamu."],
-        ["“Cikgu, bolehkah ___ pergi ke tandas?” tanya Ali dan Raju.", "'Teacher, may we go to the toilet?' asked Ali and Raju.", ["kami", "kita", "mereka", "beliau"], "Kami = tidak termasuk cikgu."],
-        ["Guru Besar sedang berucap. ___ menasihati murid-murid.", "The headmaster is speaking. He advises the pupils.", ["Beliau", "Dia orang", "Kami", "Awak"]],
-        ["“Siapakah nama ___?” tanya saya kepada murid baharu itu.", "'What is your name?' I asked the new pupil.", ["awak", "saya", "mereka", "kami"]]
+        ["Nama ___ ialah Imran. Saya berumur lapan tahun.", "___ name is Imran. (talking about yourself)", ["saya", "dia", "mereka", "beliau"]],
+        ["Itu Siti. ___ kawan baik saya.", "That is Siti. ___ is my best friend. (one other person)", ["Dia", "Kami", "Mereka", "Kita"]],
+        ["Ali dan Abu bermain bola. ___ sangat gembira.", "Ali and Abu play football. ___ are very happy. (more than one person)", ["Mereka", "Dia", "Saya", "Beliau"]],
+        ["“Mari ___ pergi ke kantin bersama-sama,” kata Mei kepada Ana.", "'Let ___ go to the canteen together,' said Mei to Ana. (Ana is included)", ["kita", "kami", "mereka", "dia"], "Kita = saya dan kamu."],
+        ["“Cikgu, bolehkah ___ pergi ke tandas?” tanya Ali dan Raju.", "'Teacher, may ___ go to the toilet?' asked Ali and Raju. (the teacher is not included)", ["kami", "kita", "mereka", "beliau"], "Kami = tidak termasuk cikgu."],
+        ["Guru Besar sedang berucap. ___ menasihati murid-murid.", "The headmaster is speaking. ___ advises the pupils. (a respected person)", ["Beliau", "Dia orang", "Kami", "Awak"]],
+        ["“Siapakah nama ___?” tanya saya kepada murid baharu itu.", "'What is ___ name?' I asked the new pupil. (the person you are talking to)", ["awak", "saya", "mereka", "kami"]]
       ]
     },
     {
@@ -146,8 +146,8 @@ window.SUBJECTS.push({
         ] }
       ],
       q: [
-        ["Ibu membeli se___ ikan di pasar.", "Mother bought a fish at the market.", ["ekor", "orang", "buah", "helai"]],
-        ["Tiga ___ murid sedang membaca.", "Three pupils are reading.", ["orang", "ekor", "batang", "biji"]],
+        ["Ibu membeli se___ ikan di pasar.", "Mother bought a fish at the market. (counting an animal)", ["ekor", "orang", "buah", "helai"]],
+        ["Tiga ___ murid sedang membaca.", "Three pupils are reading. (counting people)", ["orang", "ekor", "batang", "biji"]],
         ["Ayah membeli se___ kereta baharu.", "Father bought a new car.", ["buah", "ekor", "helai", "kuntum"]],
         ["Saya ada dua ___ pensel.", "I have two pencils.", ["batang", "biji", "keping", "orang"]],
         ["Kakak memakai se___ baju kurung.", "Sister wears a baju kurung.", ["helai", "buah", "batang", "ekor"]],
