@@ -15,10 +15,10 @@
   var ME = null, S = fresh();
   function saveP() { put(PKEY, P); }
   function save() { if (ME) put(SKEY + ME.id, S); }
-  function addProfile(name, av, state) {
+  function addProfile(name, av, state, year) {
     var id = "p" + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
     name = String(name || "").trim().slice(0, 20) || "Murid " + (P.list.length + 1);
-    P.list.push({ id: id, name: name, av: AV.indexOf(av) < 0 ? AV[0] : av, year: YEAR });
+    P.list.push({ id: id, name: name, av: AV.indexOf(av) < 0 ? AV[0] : av, year: Math.floor(+year) || YEAR });
     put(SKEY + id, Object.assign(fresh(), state || {}));
     saveP();
     return id;
@@ -47,6 +47,14 @@
   })();
 
   var SUBJECTS = window.SUBJECTS || [];
+  // setiap mata pelajaran milik satu tahun; murid hanya melihat tahun yang dipilihnya
+  function yearOf(s) { return s.year || 2; }
+  var YEARS = uniq(SUBJECTS.map(yearOf)).sort();
+  function myYear() { return ME && YEARS.indexOf(+ME.year) >= 0 ? +ME.year : YEAR; }
+  function subs() { var y = myYear(); return SUBJECTS.filter(function (s) { return yearOf(s) === y; }); }
+  function yearBtns(sel) {
+    return '<div class="years">' + YEARS.map(function (y) { return '<button class="yr' + (y === sel ? " sel" : "") + '" data-y="' + y + '">Tahun ' + y + en("Year " + y) + "</button>"; }).join("") + "</div>";
+  }
   var EN = window.EN || {};
   var AR = /[؀-ۿݐ-ݿ]/;
   var INTERVALS = [0, 1, 2, 4, 7, 14]; // hari sebelum soalan muncul semula (kotak Leitner)
@@ -143,7 +151,7 @@
   }
   function tkey(sub, top) { return sub.id + "." + top.id; }
   // Bahasa Melayu: pilihan jawapan tidak diterjemah, supaya butang 🇬🇧 tidak membocorkan jawapan.
-  function hideAns(sub) { return sub.id === "bm"; }
+  function hideAns(sub) { return /^bm/.test(sub.id); }
   function pool(sub, top, only) {
     var out = [], base = tkey(sub, top), skip = hideAns(sub);
     if (!only || only === "q") (top.q || []).forEach(function (x, i) {
@@ -165,10 +173,15 @@
   }
   function allPool() {
     var out = [];
-    SUBJECTS.forEach(function (s) { s.topics.forEach(function (t) { out = out.concat(pool(s, t)); }); });
+    subs().forEach(function (s) { s.topics.forEach(function (t) { out = out.concat(pool(s, t)); }); });
     return out;
   }
-  function dueCount() { var t = today(), n = 0; for (var k in S.box) if (S.box[k].d <= t && S.box[k].b < 5) n++; return n; }
+  function dueCount() {
+    var t = today(), n = 0, mine = {};
+    subs().forEach(function (s) { mine[s.id] = 1; });
+    for (var k in S.box) if (mine[k.split(".")[0]] && S.box[k].d <= t && S.box[k].b < 5) n++;
+    return n;
+  }
   function masteredCount() { var n = 0; for (var k in S.box) if (S.box[k].b >= 3) n++; return n; }
   function reviewSet() {
     var t = today(), all = allPool();
@@ -208,12 +221,14 @@
     render((first ? "" : bar("➕ Murid baharu", " ")) + '<div class="welcome' + (first ? "" : " sub") + '">' +
       (first ? '<div class="mascot">🦉</div><h1>Selamat datang!' + en("Welcome!") + "</h1>" : "") + "<p>Siapa nama awak?" + en("What is your name?") + "</p>" +
       '<div class="panel" style="margin-top:20px"><input type="text" id="nm" placeholder="Nama saya..." maxlength="20" autocomplete="off"></div>' +
+      (YEARS.length > 1 ? "<p>Awak Tahun berapa?" + en("Which year are you in?") + "</p>" + yearBtns(YEAR) : "") +
       "<p>Pilih gambar awak" + en("Choose your picture") + "</p>" + avs(free) +
       '<button class="btn" id="go">Jom mula! 🚀' + en("Let's start!") + "</button>" +
       '<button class="btn alt" id="rest">📥 Ada kod sandaran?' + en("Have a backup code?") + "</button></div>");
     avPick();
+    on("[data-y]", function (el) { Array.prototype.forEach.call(app.querySelectorAll(".yr"), function (b) { b.classList.toggle("sel", b === el); }); sfx.tap(); });
     on("#back", who);
-    on("#go", function () { var eng = S.eng; use(addProfile($("#nm").value, avSel())); S.eng = eng; save(); applyEng(); home(); });
+    on("#go", function () { var eng = S.eng, y = $(".yr.sel"); use(addProfile($("#nm").value, avSel(), null, y ? y.dataset.y : YEAR)); S.eng = eng; save(); applyEng(); home(); });
     on("#rest", function () { restore(first ? welcome : who); });
   }
 
@@ -225,7 +240,7 @@
     P.list.forEach(function (p) {
       var st = get(SKEY + p.id) || {}, n = 0;
       for (var k in st.stars || {}) n += st.stars[k];
-      h += '<button class="card" data-p="' + p.id + '"><span class="ic">' + p.av + "</span><span><b>" + esc(p.name) + '</b><span class="st">⭐ ' + n + "</span></span></button>";
+      h += '<button class="card" data-p="' + p.id + '"><span class="ic">' + p.av + "</span><span><b>" + esc(p.name) + "</b>" + (YEARS.length > 1 ? "<small>Tahun " + (p.year || YEAR) + "</small>" : "") + '<span class="st">⭐ ' + n + "</span></span></button>";
     });
     render(h + '</div><button class="btn alt" id="add">➕ Tambah murid' + en("Add a child") + "</button>" +
       '<button class="btn alt" id="rest">📥 Ada kod sandaran?' + en("Have a backup code?") + "</button></div>");
@@ -241,14 +256,16 @@
     var h = '<div class="hello"><button class="mascot" id="who" aria-label="Tukar murid">' + ME.av + '</button><div class="grow"><h1>Hai, ' + esc(ME.name) + "! 👋</h1><p>Jom belajar sambil bermain." + en("Let's learn while we play.") + '</p></div><button class="round" id="set" aria-label="Tetapan">⚙️</button></div>' +
       '<div class="stats"><div>⭐ <b>' + totalStars() + "</b><small>bintang" + en("stars") + "</small></div><div>🔥 <b>" + (S.last >= today() - 1 ? S.streak : 0) + "</b><small>hari berturut-turut" + en("days in a row") + "</small></div><div>🧠 <b>" + masteredCount() + "</b><small>sudah ingat" + en("remembered") + "</small></div></div>" +
       '<button class="review" id="rev">🔁 Ulang Kaji Hari Ini<small>' + (due ? due + " soalan perlu diulang" : "10 soalan campuran") + "</small>" + en("Today's revision – " + (due ? due + " questions to go over again" : "10 mixed questions")) + "</button>" +
-      '<div class="grid">';
-    SUBJECTS.forEach(function (s, i) {
+      (YEARS.length > 1 ? yearBtns(myYear()) : "") + '<div class="grid">';
+    var list = subs();
+    list.forEach(function (s, i) {
       var got = 0, max = 0;
       s.topics.forEach(function (t) { gamesOf(t).forEach(function (g) { max += 3; got += S.stars[tkey(s, t) + ":" + g] || 0; }); });
       h += '<button class="card big" data-s="' + i + '" style="--c:' + s.color + '"><span class="ic">' + s.icon + "</span><span><b>" + esc(s.name) + "</b>" + en(s.en) + '<span class="st">⭐ ' + got + " / " + max + "</span></span></button>";
     });
     render(h + "</div>");
-    on("[data-s]", function (el) { sfx.tap(); subject(SUBJECTS[+el.dataset.s]); });
+    on("[data-s]", function (el) { sfx.tap(); subject(list[+el.dataset.s]); });
+    on("[data-y]", function (el) { ME.year = +el.dataset.y; saveP(); sfx.tap(); home(); });
     on("#set", settings);
     on("#who", function () { sfx.tap(); who(); });
     on("#rev", function () { sfx.tap(); color("#FF6B6B"); runQuiz(reviewSet(), { title: "🔁 Ulang Kaji", back: home, again: function () { runQuiz(reviewSet(), this); } }); });
@@ -457,7 +474,7 @@
   /* ---------- tetapan (untuk ibu bapa) ---------- */
   function settings() {
     color();
-    var nq = allPool().length, nt = 0; SUBJECTS.forEach(function (s) { nt += s.topics.length; });
+    var nq = allPool().length, nt = 0; subs().forEach(function (s) { nt += s.topics.length; });
     render(bar("⚙️ Tetapan") +
       '<div class="panel"><label for="nm">Nama murid' + en("Pupil's name") + '</label><input type="text" id="nm" maxlength="20" value="' + esc(ME.name) + '">' + avs(ME.av) +
       '<button class="btn alt" id="swap">👥 Tukar atau tambah murid' + en("Switch or add a child") + "</button></div>" +
@@ -466,10 +483,10 @@
       '<button class="btn" id="bak">📤 Buat kod sandaran' + en("Make a backup code") + '</button><button class="btn alt" id="rest">📥 Pulihkan daripada kod' + en("Restore from a code") + "</button></div>" +
       '<div class="panel row"><div><b>Bunyi</b>' + en("Sound effects") + '</div><button class="tog' + (S.sound ? " on" : "") + '" id="snd" aria-label="Bunyi"></button></div>' +
       '<div class="panel"><b>Bahasa Inggeris</b><small>Tekan butang 🇬🇧 di bahagian atas mana-mana halaman untuk menunjukkan atau menyembunyikan Bahasa Inggeris.</small>' + en("Tap the 🇬🇧 button at the top of any page to show or hide the English.") + "</div>" +
-      '<div class="panel"><b>Kemajuan</b>' + en("Progress") + "<small>" + nt + " topik · " + nq + " soalan · " + Object.keys(S.box).length + " sudah dicuba · " + masteredCount() + " sudah diingat</small>" +
+      '<div class="panel"><b>Kemajuan – Tahun ' + myYear() + "</b>" + en("Progress – Year " + myYear()) + "<small>" + nt + " topik · " + nq + " soalan · " + Object.keys(S.box).length + " sudah dicuba · " + masteredCount() + " sudah diingat</small>" +
       en(nt + " topics · " + nq + " questions · " + Object.keys(S.box).length + " tried · " + masteredCount() + " remembered") +
       '<button class="btn warn" id="reset">Padam semua kemajuan' + en("Erase all progress") + '</button><button class="btn warn" id="del">Padam murid ini' + en("Delete this child") + "</button></div>" +
-      '<div class="panel"><small>Kandungan berdasarkan KSSR (Semakan 2017) Tahun 2 – Sains dan Bahasa Melayu SK – serta asas KAFA (Akidah, Ibadah, Sirah, Adab, Jawi, Bahasa Arab, Tilawah al-Quran). Soalan boleh ditambah dalam folder <b>data/</b>.</small></div>');
+      '<div class="panel"><small>Kandungan berdasarkan KSSR (Semakan 2017) – Sains dan Bahasa Melayu SK – serta asas KAFA (Akidah, Ibadah, Sirah, Adab, Jawi, Bahasa Arab, Tilawah al-Quran). Soalan boleh ditambah dalam folder <b>data/</b>.</small></div>');
     function keep() { ME.name = $("#nm").value.trim().slice(0, 20) || ME.name; ME.av = avSel(); saveP(); }
     avPick();
     on("#back", function () { keep(); home(); });
@@ -527,7 +544,7 @@
         if (b !== null && day !== null) st.box[k] = { b: b, d: day };
       }
       st.streak = int(d.k, 0, 1e5) || 0; st.last = int(d.l, 0, 1e6) || 0;
-      return { name: d.n, av: d.a, state: st };
+      return { name: d.n, av: d.a, year: d.y, state: st };
     });
   }
 
@@ -565,7 +582,7 @@
     on("#go", function () {
       var eng = S.eng;
       readCode($("#code").value).then(function (r) {
-        use(addProfile(r.name, r.av, r.state)); S.eng = eng; save(); applyEng(); sfx.win(); home();
+        use(addProfile(r.name, r.av, r.state, r.year)); S.eng = eng; save(); applyEng(); sfx.win(); home();
       }, function (e) {
         var old = e && e.message === "old";
         $("#msg").innerHTML = (old ? "Pelayar ini terlalu lama untuk membaca kod ini. Sila kemas kini tablet." : "Kod ini tidak sah. Pastikan seluruh kod disalin.") +
